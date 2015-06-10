@@ -1,11 +1,11 @@
 import datetime
 #Initialize a list of roommates and duties
-roommates = ['Marco', 'Diego', 'Lucas', 'Sean']
+roommates = ['Lucas', 'Marco', 'Diego'  ]
 
-duties = ['Sweeping+Sink', 'Stove/Light Fridge', 'Trash/Recycle', 'Bathroom']
+duties = ['Stove, Fridge, Sweeping', 'Trash, Recycle', 'Bathroom, Sink']
 
 #Set the start date
-date = datetime.date(2015,1,4)
+date = datetime.date(2015,6,17)
 #Define a time delta of one week
 week = datetime.timedelta(weeks=1)
 
@@ -36,7 +36,7 @@ f.write("""<style>
 #Start the table!
 f.write("<table>")
 #Write the first cell: a bold 'Week Starting'
-first_row = add_to_row('', '<b>Week Starting:</b>')
+first_row = add_to_row('', '<b>Week Ending:</b>')
 #Add each of the roommates (also bold)
 for roommate in roommates:
     first_row = add_to_row(first_row, '<b>%s</b>'%roommate)
