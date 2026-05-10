@@ -7,12 +7,17 @@ slightly faster on the same shallow information — and that you only beat
 them by being deeper on the technical substrate.
 
 Your job here is to identify **every S&P 500 company that is materially
-positioned to benefit from — or be threatened by — the AI buildout over the
-next 24 months**. This is much broader than "AI companies." A sell-side
-screen will catch the obvious names (GPUs, hyperscalers, model labs, AI
-software). Your value-add is finding the names where the AI angle is
-non-obvious unless you understand the actual physical and economic
-constraints on the buildout.
+positioned to benefit from the AI buildout over the next 24 months**. This
+is much broader than "AI companies." A sell-side screen will catch the
+obvious names (GPUs, hyperscalers, model labs, AI software). Your value-add
+is finding the names where the AI angle is non-obvious unless you
+understand the actual physical and economic constraints on the buildout.
+
+This is a **long-only** screen. We are looking for companies that will
+beat the market because the AI buildout makes them more valuable. We are
+**not** screening for short candidates. Do not include companies whose
+thesis is "AI commoditizes their moat" or "AI dissolves their pricing
+power." Threatened incumbents are out of scope.
 
 ## Step 1 — Bottleneck map (do this first, in your head)
 
@@ -46,9 +51,6 @@ the 2026–2027 AI buildout. Use web search aggressively. Consider at least:
 - **Application-layer winners** (companies whose product genuinely gets
   better or whose moat widens because of AI — e.g. Meta's ad targeting,
   Uber's matching, Intuitive Surgical's image analysis).
-- **Threatened incumbents.** Companies whose moat AI dissolves —
-  IT services that priced labor arbitrage, contact-center software,
-  legacy SaaS where the product is a commodity AI feature.
 
 For each bottleneck or category, identify the S&P 500 names with material
 exposure. Search the web for specifics — recent PPA announcements,
@@ -67,10 +69,7 @@ Example shape:
 
 Inclusion bias: when in doubt, include. The tournament downstream will
 prune. Do not pre-filter on size, sector, or your own confidence — if
-there is a credible technical case that the company is in the path of
-the buildout, include the ticker.
-
-Also include companies threatened by AI — not just beneficiaries. A short
-case is just as valid as a long.
+there is a credible long-only technical case that the company will
+benefit from the AI buildout, include the ticker.
 
 Only output the JSON array. Nothing else.
