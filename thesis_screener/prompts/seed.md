@@ -63,10 +63,25 @@ Write the dossier as markdown with exactly these sections, in order:
 ## Where this sits in the AI stack
 One paragraph. What does {TICKER} physically sell or operate at which
 layer of the AI stack — silicon, packaging, memory, networking, power,
-cooling, software runtime, training platform, application, or threatened
-incumbent. Be precise about the layer and the workload (training vs.
-inference, frontier vs. fine-tune, batch vs. real-time, etc.). One short
-paragraph maximum.
+cooling, software runtime, training platform, application. Be precise
+about the layer and the workload (training vs. inference, frontier vs.
+fine-tune, batch vs. real-time, etc.). One short paragraph maximum.
+
+## Snapshot
+A required structured block. Pull these via web search and cite each.
+Use the most recent close.
+
+- **Price:** $X.XX (YYYY-MM-DD close)
+- **Market cap:** $XXX.XB / $X.XXT
+- **52-week range:** $low – $high
+- **Forward P/E:** X.X× (on FY consensus EPS $X.XX)
+- **EV / NTM revenue:** X.X×
+- **Consensus 12-month price target:** $X.XX (implied +/-X% from price)
+- **YTD total return:** +/-X%
+- **Short interest (% of float):** X.X%
+
+If a metric genuinely doesn't apply (e.g. unprofitable name, no consensus
+PT), say "n/a — <reason>". Don't omit fields silently.
 
 ## Moat — what it is physically made of
 This is the most important section. Don't write "CUDA is a switching
