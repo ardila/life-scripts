@@ -179,10 +179,26 @@ def fetch_history(token_id: str, fidelity: int = 1440) -> pd.Series:
 
 
 def yes_series(mi: MarketInfo) -> pd.Series:
-    """Pull Yes-price history; auto-flip to No token if snapshot mismatches."""
+    """Pull Yes-price history; handle resolved markets and Yes/No swap heuristic."""
     s = fetch_history(mi.yes_token_id)
+
+    # Resolved markets: anchor the YES series at the resolved value through today.
+    # CLOB history often stops at a stale last-trade price and misses the
+    # settlement jump, which would otherwise trigger a wrong Yes/No swap.
+    if mi.closed and mi.snapshot_yes is not None and (mi.snapshot_yes >= 0.99 or mi.snapshot_yes <= 0.01):
+        now = pd.Timestamp.now(tz="UTC").floor("D")
+        if s.empty:
+            print(f"INFO market {mi.market_id} ({mi.key} {mi.outcome_label}) resolved at {mi.snapshot_yes}; no history")
+            return pd.Series([mi.snapshot_yes], index=[now], dtype=float)
+        last_trade = s.index.max()
+        if now > last_trade:
+            fill_idx = pd.date_range(last_trade + pd.Timedelta(days=1), now, freq="1D", tz="UTC")
+            s = pd.concat([s, pd.Series(mi.snapshot_yes, index=fill_idx, dtype=float)])
+            print(f"INFO market {mi.market_id} ({mi.key} {mi.outcome_label}) resolved at {mi.snapshot_yes}; "
+                  f"extended from {last_trade.date()} to {now.date()}")
+        return s.sort_index()
+
     if s.empty:
-        # Try the other token in case the gamma ordering was reversed.
         s_alt = fetch_history(mi.no_token_id)
         if not s_alt.empty and mi.snapshot_yes is not None:
             if abs(s_alt.iloc[-1] - mi.snapshot_yes) <= 0.05:
@@ -244,7 +260,9 @@ def build_frame() -> tuple[pd.DataFrame, dict[str, MarketInfo]]:
             if s.empty:
                 print(f"WARN empty history for {key} {label}", file=sys.stderr)
                 continue
-            if is_locked(s):
+            # is_locked skip is only for the optional sidebar markets (no_strike);
+            # main constituents should still contribute their resolved value to the mean.
+            if key not in MAIN_KEYS and is_locked(s):
                 print(f"INFO skipping locked market {key} {label} (already resolved)")
                 continue
             col = f"{key}__{label.replace(' ', '_').lower()}"
@@ -299,7 +317,13 @@ def plot(df: pd.DataFrame, chosen: dict[str, MarketInfo]) -> Path:
         ax.plot(df.index, df["regime"] * 100, color="#9467bd", linewidth=1.0, alpha=0.7,
                 label="Iranian regime falls by May 31  [sidebar]")
 
-    ax.set_ylim(0, 60)
+    data_max_pct = 0.0
+    for col in df.columns:
+        v = df[col].max()
+        if pd.notna(v):
+            data_max_pct = max(data_max_pct, float(v) * 100)
+    ymax = min(100, max(60, int(data_max_pct * 1.15) + 5))
+    ax.set_ylim(0, ymax)
     ax.set_ylabel("Implied probability (%)")
     ax.set_xlabel("Date")
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0f}%"))
@@ -308,7 +332,7 @@ def plot(df: pd.DataFrame, chosen: dict[str, MarketInfo]) -> Path:
     ax.grid(True, alpha=0.25)
 
     # Annotations
-    ymax_anno = 55
+    ymax_anno = ymax * 0.92
     for d, label in ANNOTATIONS:
         dt = pd.Timestamp(d, tz="UTC")
         if dt < df.index.min() or dt > df.index.max():
