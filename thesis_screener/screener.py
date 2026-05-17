@@ -74,6 +74,9 @@ def seed(ticker, run, model, effort):
     return out
 
 def match(a_path, b_path, run, round_n, model, effort):
+    """a_path, b_path are seed Paths. Returns the winning Path. The judge
+    picks 'A' or 'B'; orchestrator maps to the path mechanically so judge
+    typos can't break the bracket."""
     a, b = a_path.stem, b_path.stem
     out = run / f"round_{round_n}" / f"{a}_vs_{b}.json"
     def go():
@@ -86,19 +89,24 @@ def match(a_path, b_path, run, round_n, model, effort):
         if not m:
             raise RuntimeError(f"match {a}_vs_{b} did not return JSON: {text[:500]}")
         return m.group(0)
-    return json.loads(memo(out, go))["winner"]
+    verdict = json.loads(memo(out, go))
+    side = verdict.get("winner", "").strip().upper()
+    if side not in ("A", "B"):
+        raise RuntimeError(f"match {a}_vs_{b} winner is {side!r}, expected 'A' or 'B'")
+    return a_path if side == "A" else b_path
 
 def tournament(tickers, run, model, effort, parallel):
     survivors = [run / "seeds" / f"{t}.md" for t in tickers]
     round_n = 1
     while len(survivors) > 4:
-        random.Random(round_n).shuffle(survivors)
-        pairs = [(survivors[i], survivors[i+1]) for i in range(0, len(survivors)-1, 2)]
+        survivors.sort(key=lambda p: p.stem)        # deterministic input...
+        random.Random(round_n).shuffle(survivors)   # ...seeded shuffle for diverse pairings
+        pairs = list(zip(survivors[0::2], survivors[1::2]))
         bye = [survivors[-1]] if len(survivors) % 2 else []
         print(f"[round {round_n}] {len(survivors)} survivors → {len(pairs)} matches" + (" + 1 bye" if bye else ""))
         with concurrent.futures.ThreadPoolExecutor(parallel) as ex:
             winners = list(ex.map(lambda p: match(*p, run, round_n, model, effort), pairs))
-        survivors = [run / "seeds" / f"{w}.md" for w in winners] + bye
+        survivors = winners + bye
         round_n += 1
     return [s.stem for s in survivors]
 

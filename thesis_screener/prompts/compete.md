@@ -55,8 +55,9 @@ fences. Schema:
 
 ```json
 {
-  "winner": "TICKER_OF_WINNER",
-  "loser": "TICKER_OF_LOSER",
+  "winner": "A" or "B",
+  "winner_ticker": "TICKER_OF_WINNER (for human readability only)",
+  "loser_ticker": "TICKER_OF_LOSER (for human readability only)",
   "margin": "decisive | clear | narrow",
   "key_argument": "One sentence: the single strongest technical reason the winner wins.",
   "strongest_counter": "One sentence: the best argument against the winner that you considered and rejected, with reason for rejection.",
@@ -66,6 +67,10 @@ fences. Schema:
   "confidence": 0.0
 }
 ```
+
+**Critical:** the `winner` field must be the literal string `"A"` or `"B"`,
+referring to which dossier won. The `winner_ticker` field is the actual
+ticker symbol for human readers and is not used by the orchestrator.
 
 `confidence` is a float in [0.0, 1.0]: how confident you are that the winner
 actually beats the loser over 12 months. Be calibrated — 0.55 is a real
