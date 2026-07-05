@@ -31,8 +31,17 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Publish to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: mahj-lounge/dist
+      # GitHub Pages for this repo serves the master branch root, so the
+      # built site is committed there. The paths filter above keeps these
+      # artifact commits from re-triggering this workflow.
+      - name: Publish site to master root
+        working-directory: .
+        run: |
+          rm -rf assets
+          cp -r mahj-lounge/dist/* .
+          touch .nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A index.html assets .nojekyll
+          git commit -m "Publish Mahj Lounge site" || echo "Site unchanged"
+          git push
