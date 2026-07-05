@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Landing } from './ui/Landing';
-import { Table } from './ui/Table';
+import { Table, SheetState } from './ui/Table';
 import { CardBrowser } from './ui/CardBrowser';
 import { Learn } from './ui/Learn';
 
@@ -14,56 +14,72 @@ function currentRoute(): Route {
 
 export default function App() {
   const [route, setRoute] = useState<Route>(currentRoute());
+  const [sheet, setSheet] = useState<SheetState>({ open: false });
 
   useEffect(() => {
     const onHash = () => {
       setRoute(currentRoute());
+      setSheet({ open: false });
       window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  const inGame = route === 'play';
+  const openSheet = (focus?: string) => setSheet({ open: true, focus });
+  const closeSheet = () => setSheet({ open: false });
+
+  // Mid-game, the Card tab opens the sheet over the table instead of routing.
+  const onCardTab = () => {
+    if (inGame) openSheet();
+    else window.location.hash = '#/card';
+  };
+
   return (
     <div className="shell">
-      <header className="header">
-        <div className="container header-inner">
-          <a className="brand" href="#/">
-            <span className="brand-mark">
-              <span />
-            </span>
-            <span className="brand-name">Mahj Lounge</span>
+      {!inGame && (
+        <header className="app-header">
+          <a className="wordmark" href="#/">
+            Mahj Lounge
           </a>
-          <nav className="nav">
-            <a href="#/play" className={route === 'play' ? 'active' : ''}>
-              Play
-            </a>
-            <a href="#/card" className={route === 'card' ? 'active' : ''}>
-              The Card
-            </a>
-            <a href="#/learn" className={route === 'learn' ? 'active' : ''}>
-              Learn
-            </a>
-          </nav>
-        </div>
-      </header>
+        </header>
+      )}
 
       {route === 'home' && <Landing />}
-      {route === 'play' && <Table />}
+      {route === 'play' && <Table sheet={sheet} onOpenSheet={openSheet} onCloseSheet={closeSheet} />}
       {route === 'card' && <CardBrowser />}
       {route === 'learn' && <Learn />}
 
-      <footer className="footer">
-        <div className="container footer-inner">
-          <span>Made with ♥ for mahj night. Not affiliated with the National Mah Jongg League.</span>
-          <span>
-            Open source under MIT ·{' '}
-            <a href="https://github.com/ardila/life-scripts" target="_blank" rel="noreferrer">
-              GitHub
-            </a>
-          </span>
-        </div>
-      </footer>
+      {route === 'home' && (
+        <footer className="site-footer">
+          Made for mahj night. Not affiliated with the National Mah Jongg League.
+          <br />
+          Open source under MIT ·{' '}
+          <a href="https://github.com/ardila/life-scripts" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+        </footer>
+      )}
+
+      <nav className="bottom-nav" aria-label="Primary">
+        <a className={`tab${route === 'play' ? ' active' : ''}`} href="#/play">
+          <span className="dot" />
+          Play
+        </a>
+        <button
+          type="button"
+          className={`tab${route === 'card' || (inGame && sheet.open) ? ' active' : ''}`}
+          onClick={onCardTab}
+        >
+          <span className="dot" />
+          Card
+        </button>
+        <a className={`tab${route === 'learn' ? ' active' : ''}`} href="#/learn">
+          <span className="dot" />
+          Learn
+        </a>
+      </nav>
     </div>
   );
 }

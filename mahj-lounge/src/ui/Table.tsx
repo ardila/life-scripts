@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { CARD, CARD_SECTIONS } from '../engine/card';
 import { CHARLESTON_STEPS, MahjGame, PLAYER_NAMES } from '../engine/game';
 import { findWin, rankHands } from '../engine/match';
 import { isJoker, tileLabel } from '../engine/tiles';
 import { Tile, TileButton } from './Tile';
 
 const BOT_DELAY_MS = 850;
+
+export type SheetState = { open: boolean; focus?: string };
 
 function useGame() {
   const ref = useRef<MahjGame | null>(null);
@@ -22,45 +25,144 @@ function useGame() {
   return { game, newGame };
 }
 
-function BotSeat({
-  game,
-  player,
-  className,
-}: {
-  game: MahjGame;
-  player: number;
-  className: string;
-}) {
+/** One opponent in the collapsed status strip; tap to peek at exposures. */
+function OpponentSeat({ game, player }: { game: MahjGame; player: number }) {
+  const [open, setOpen] = useState(false);
   const active =
     (game.phase.t === 'turn' && game.phase.player === player) ||
     (game.lastDiscard?.from === player && game.phase.t === 'claim');
+  const exposures = game.exposures[player];
+  const count = game.hands[player].length;
+
+  let status: React.ReactNode;
+  if (active) status = 'discarding';
+  else if (game.dealer === player) status = <span className="tag-dealer">dealer</span>;
+  else if (exposures.length > 0)
+    status = <span className="tag-expose">{exposures.length} exposed</span>;
+  else status = 'in hand';
+
   return (
-    <div className={`seat ${className}${active ? ' active' : ''}`}>
-      <div className="seat-name">
-        {PLAYER_NAMES[player]}
-        {game.dealer === player && <span className="chip">Dealer</span>}
+    <button
+      type="button"
+      className={`seat${active ? ' active' : ''}`}
+      onClick={() => exposures.length > 0 && setOpen((o) => !o)}
+      aria-expanded={exposures.length > 0 ? open : undefined}
+    >
+      <div className="seat-name">{PLAYER_NAMES[player]}</div>
+      <div className="seat-sub">
+        {count} tiles · {status}
       </div>
-      <div className="seat-tiles">
-        {Array.from({ length: game.hands[player].length }, (_, i) => (
-          <Tile key={i} faceDown width={22} />
-        ))}
-      </div>
-      {game.exposures[player].length > 0 && (
+      {open && exposures.length > 0 && (
         <div className="seat-exposures">
-          {game.exposures[player].map((e, i) => (
+          {exposures.map((e, i) => (
             <span key={i} className="exposure">
               {e.tiles.map((t, j) => (
-                <Tile key={j} id={t} width={26} />
+                <Tile key={j} id={t} width={22} />
               ))}
             </span>
           ))}
         </div>
       )}
+    </button>
+  );
+}
+
+/** The in-game card as a bottom sheet (right drawer on desktop). */
+function CardSheet({
+  closest,
+  focus,
+  onClose,
+}: {
+  closest: { id: string; missing: number }[];
+  focus?: string;
+  onClose: () => void;
+}) {
+  const closestById = useMemo(() => new Map(closest.map((c) => [c.id, c.missing])), [closest]);
+
+  // Scroll the focused hand into view when the sheet opens.
+  useLayoutEffect(() => {
+    if (!focus) return;
+    document.getElementById(`sheet-hand-${focus}`)?.scrollIntoView({ block: 'center' });
+  }, [focus]);
+
+  const pointsById = useMemo(() => new Map(CARD.map((h) => [h.id, h.points])), []);
+
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="card-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="The Lounge Card">
+        <div className="sheet-handle" />
+        <div className="sheet-head">
+          <h2>The Lounge Card, No. 1</h2>
+          <button className="sheet-close" onClick={onClose} aria-label="Close card">
+            ×
+          </button>
+        </div>
+        <p className="sheet-intro">
+          The game waits underneath. Tinted rows are the hands you&rsquo;re closest to.
+        </p>
+        <div className="sheet-body">
+          {closest.length > 0 && (
+            <>
+              <span className="overline">Closest to your hand</span>
+              {closest.map((c) => {
+                const pts = pointsById.get(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="closest-row"
+                    onClick={() =>
+                      document
+                        .getElementById(`sheet-hand-${c.id}`)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }
+                  >
+                    <span className="pattern">{CARD.find((h) => h.id === c.id)?.display}</span>
+                    <span className="meta">
+                      {c.missing} away{pts != null ? ` · ${pts} pts` : ''}
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+          {CARD_SECTIONS.map((section) => (
+            <div key={section}>
+              <div className="sheet-section-head">{section}</div>
+              {CARD.filter((h) => h.section === section).map((h) => {
+                const missing = closestById.get(h.id);
+                const tinted = missing != null;
+                return (
+                  <div
+                    key={h.id}
+                    id={`sheet-hand-${h.id}`}
+                    className={`sheet-hand${tinted ? ' tinted' : ''}${focus === h.id ? ' focus' : ''}`}
+                  >
+                    <span className="pattern">{h.display}</span>
+                    <span className="pts">
+                      {h.points}
+                      {tinted ? ` · ${missing} away` : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-export function Table() {
+export function Table({
+  sheet,
+  onOpenSheet,
+  onCloseSheet,
+}: {
+  sheet: SheetState;
+  onOpenSheet: (focus?: string) => void;
+  onCloseSheet: () => void;
+}) {
   const { game, newGame } = useGame();
   const [selected, setSelected] = useState<number[]>([]);
   const phase = game.phase;
@@ -92,6 +194,10 @@ export function Table() {
     () => (phase.t === 'over' ? [] : rankHands(rack, game.exposures[0], 3)),
     [game.version, phase.t],
   );
+  const closest = useMemo(
+    () => hints.map((h) => ({ id: h.hand.pattern.id, missing: h.missing })),
+    [hints],
+  );
 
   const toggleTile = (i: number) => {
     if (!selectable) return;
@@ -109,189 +215,214 @@ export function Table() {
 
   const selectedTiles = selected.map((i) => rack[i]);
 
-  const actionBar = () => {
+  // Split the action UI into a status note + a set of buttons.
+  const renderActions = (): { note: React.ReactNode; buttons: React.ReactNode } => {
     if (inCharleston) {
       const dir = CHARLESTON_STEPS[(phase as { t: 'charleston'; step: number }).step];
-      return (
-        <>
-          <span className="action-note">
-            Charleston — choose 3 tiles to pass <strong>{dir}</strong>.
-          </span>
+      return {
+        note: (
+          <>
+            Charleston — choose 3 to pass <strong>{dir}</strong>.
+          </>
+        ),
+        buttons: (
           <button
-            className="btn btn-primary btn-small"
+            className="btn btn-primary"
             disabled={selected.length !== 3}
             onClick={() => game.charlestonPass(selectedTiles)}
           >
             Pass {selected.length}/3 {dir}
           </button>
-        </>
-      );
+        ),
+      };
     }
     if (phase.t === 'charleston-query') {
-      return (
-        <>
-          <span className="action-note">Do a second Charleston?</span>
-          <button className="btn btn-secondary btn-small" onClick={() => game.charlestonDecision(true)}>
-            Yes, keep passing
-          </button>
-          <button className="btn btn-ghost btn-small" onClick={() => game.charlestonDecision(false)}>
-            No, let&rsquo;s play
-          </button>
-        </>
-      );
+      return {
+        note: 'Do a second Charleston?',
+        buttons: (
+          <>
+            <button className="btn btn-secondary" onClick={() => game.charlestonDecision(true)}>
+              Keep passing
+            </button>
+            <button className="btn btn-primary" onClick={() => game.charlestonDecision(false)}>
+              Let&rsquo;s play
+            </button>
+          </>
+        ),
+      };
     }
     if (inCourtesy) {
-      return (
-        <>
-          <span className="action-note">
-            Courtesy pass — select up to 3 tiles to offer {PLAYER_NAMES[2]} (she&rsquo;ll match the
-            smaller number).
-          </span>
+      return {
+        note: <>Courtesy pass — offer up to 3 to {PLAYER_NAMES[2]}.</>,
+        buttons: (
           <button
-            className="btn btn-primary btn-small"
+            className="btn btn-primary"
             onClick={() => game.courtesy(selected.length, selectedTiles)}
           >
             {selected.length === 0 ? 'Skip courtesy' : `Offer ${selected.length}`}
           </button>
-        </>
-      );
+        ),
+      };
     }
     if (phase.t === 'claim' && game.humanClaim) {
       const tile = game.lastDiscard!.tile;
-      return (
-        <>
-          <span className="action-note">
-            {PLAYER_NAMES[game.lastDiscard!.from]} discarded <strong>{tileLabel(tile)}</strong> — want it?
-          </span>
-          {game.humanClaim.canMahjong && (
-            <button className="btn btn-primary btn-small" onClick={() => game.humanClaimDecision('mahjong')}>
-              Mahjong!
+      return {
+        note: (
+          <>
+            {PLAYER_NAMES[game.lastDiscard!.from]} discarded <strong>{tileLabel(tile)}</strong>.
+          </>
+        ),
+        buttons: (
+          <>
+            {game.humanClaim.canMahjong && (
+              <button className="btn btn-primary" onClick={() => game.humanClaimDecision('mahjong')}>
+                Mahjong
+              </button>
+            )}
+            {game.humanClaim.options.map((opt, i) => (
+              <button key={i} className="btn btn-secondary" onClick={() => game.humanClaimDecision(opt)}>
+                Call {opt.group.count === 3 ? 'pung' : opt.group.count === 4 ? 'kong' : 'quint'}
+              </button>
+            ))}
+            <button className="btn btn-ghost" onClick={() => game.humanClaimDecision('pass')}>
+              Pass
             </button>
-          )}
-          {game.humanClaim.options.map((opt, i) => (
-            <button
-              key={i}
-              className="btn btn-secondary btn-small"
-              onClick={() => game.humanClaimDecision(opt)}
-            >
-              Call {opt.group.count === 3 ? 'pung' : opt.group.count === 4 ? 'kong' : 'quint'}
-            </button>
-          ))}
-          <button className="btn btn-ghost btn-small" onClick={() => game.humanClaimDecision('pass')}>
-            Pass
-          </button>
-        </>
-      );
+          </>
+        ),
+      };
     }
     if (isHumanTurn) {
-      return (
-        <>
-          <span className="action-note">Your turn — pick a tile to discard.</span>
-          {jokerSwaps.map((s, i) => (
-            <button key={i} className="swap-chip" onClick={() => game.swapJoker(s)}>
-              ♻ Trade {tileLabel(s.tile)} for {PLAYER_NAMES[s.owner]}&rsquo;s joker
+      return {
+        note: 'Your turn — pick a tile to discard.',
+        buttons: (
+          <>
+            {jokerSwaps.map((s, i) => (
+              <button key={i} className="swap-chip" onClick={() => game.swapJoker(s)}>
+                ♻ Trade {tileLabel(s.tile)} for {PLAYER_NAMES[s.owner]}&rsquo;s joker
+              </button>
+            ))}
+            {canMahjong && (
+              <button className="btn btn-primary" onClick={() => game.declareMahjong()}>
+                Mahjong
+              </button>
+            )}
+            <button
+              className="btn btn-primary"
+              disabled={selected.length !== 1}
+              onClick={() => game.discard(selectedTiles[0])}
+            >
+              {selected.length === 1 ? `Discard ${tileLabel(selectedTiles[0])}` : 'Discard'}
             </button>
-          ))}
-          {canMahjong && (
-            <button className="btn btn-primary btn-small" onClick={() => game.declareMahjong()}>
-              Mahjong!
-            </button>
-          )}
-          <button
-            className="btn btn-secondary btn-small"
-            disabled={selected.length !== 1}
-            onClick={() => game.discard(selectedTiles[0])}
-          >
-            Discard
-          </button>
-        </>
-      );
+          </>
+        ),
+      };
     }
     if (phase.t === 'over') {
-      return (
-        <>
-          <span className="action-note">Game over.</span>
-          <button className="btn btn-primary btn-small" onClick={newGame}>
+      return {
+        note: 'Game over.',
+        buttons: (
+          <button className="btn btn-primary" onClick={newGame}>
             Play again
           </button>
-        </>
-      );
+        ),
+      };
     }
-    return <span className="action-note">Waiting for {PLAYER_NAMES[(phase as { t: 'turn'; player: number }).player]}…</span>;
+    return {
+      note: <>Waiting for {PLAYER_NAMES[(phase as { t: 'turn'; player: number }).player]}…</>,
+      buttons: null,
+    };
   };
 
-  return (
-    <main className="table-page container">
-      <div className="table-grid">
-        <BotSeat game={game} player={2} className="seat-top" />
-        <BotSeat game={game} player={3} className="seat-left" />
-        <BotSeat game={game} player={1} className="seat-right" />
+  const actions = renderActions();
+  const topHint = hints[0];
 
-        <div className="center-area">
-          <div className="center-meta">
-            <span>Discards</span>
-            <span>{game.wall.length} tiles in the wall</span>
-          </div>
+  return (
+    <main className="table-page">
+      <div className="table-topbar">
+        <a className="wordmark" href="#/">
+          Mahj Lounge
+        </a>
+        <span className="wall-count">{game.wall.length} in the wall</span>
+      </div>
+
+      <div className="table-scroll">
+        <div className="opponents">
+          {[3, 2, 1].map((p) => (
+            <OpponentSeat key={p} game={game} player={p} />
+          ))}
+        </div>
+
+        <div className="discards">
+          <span className="overline">Discards</span>
           <div className="discard-pool">
             {game.discards.map((d, i) => (
               <span key={i}>
-                <Tile id={d.tile} width={30} />
+                <Tile id={d.tile} width={28} />
               </span>
             ))}
             {game.lastDiscard && (
               <span className="latest">
-                <Tile id={game.lastDiscard.tile} width={30} />
+                <Tile id={game.lastDiscard.tile} width={28} />
               </span>
             )}
           </div>
           <div className="table-log">{game.log[game.log.length - 1]}</div>
         </div>
 
-        <div className={`seat seat-you${isHumanTurn || inCharleston || inCourtesy ? ' active' : ''}`}>
-          <div className="seat-name">
-            You
-            {game.dealer === 0 && <span className="chip">Dealer</span>}
+        {topHint && (
+          <button
+            type="button"
+            className="hint-chip"
+            onClick={() => onOpenSheet(topHint.hand.pattern.id)}
+          >
+            <span className="pattern">{topHint.hand.pattern.display}</span>
+            <span className="away">
+              {topHint.missing === 0
+                ? 'Mahjong!'
+                : `${topHint.missing} away · view on card →`}
+            </span>
+          </button>
+        )}
+
+        <div className={`you-tray${selectable ? '' : ''}`}>
+          <div className="tray-head">
+            <span className="you-label">
+              You
+              {game.dealer === 0 && <span className="chip">Dealer</span>}
+            </span>
+            <span className="action-note">{actions.note}</span>
           </div>
+
           {game.exposures[0].length > 0 && (
-            <div className="seat-exposures">
+            <div className="seat-you-exposures">
               {game.exposures[0].map((e, i) => (
                 <span key={i} className="exposure">
                   {e.tiles.map((t, j) => (
-                    <Tile key={j} id={t} width={34} />
+                    <Tile key={j} id={t} width={30} />
                   ))}
                 </span>
               ))}
             </div>
           )}
+
           <div className="rack">
             {rack.map((t, i) => (
               <TileButton
                 key={`${t}-${i}`}
                 id={t}
-                width={52}
+                width={46}
                 selected={selected.includes(i)}
                 disabled={!selectable || ((inCharleston || inCourtesy) && isJoker(t))}
                 onClick={() => toggleTile(i)}
               />
             ))}
           </div>
-          <div className="action-bar">{actionBar()}</div>
-          {hints.length > 0 && (
-            <details className="hints">
-              <summary>Hints — closest hands on the card</summary>
-              {hints.map((h) => (
-                <div key={h.hand.pattern.id} className="hint-row">
-                  <span className="pattern">{h.hand.pattern.display}</span>
-                  <span>{h.hand.pattern.section}</span>
-                  <span className="away">
-                    {h.missing === 0 ? 'Mahjong!' : `${h.missing} tile${h.missing === 1 ? '' : 's'} away`}
-                  </span>
-                </div>
-              ))}
-            </details>
-          )}
+
+          <div className="action-bar">{actions.buttons}</div>
         </div>
       </div>
+
+      {sheet.open && <CardSheet closest={closest} focus={sheet.focus} onClose={onCloseSheet} />}
 
       {phase.t === 'over' && (
         <div className="overlay">
@@ -299,10 +430,10 @@ export function Table() {
             {game.winner ? (
               <>
                 <h2>
-                  {game.winner.player === 0 ? '🎉 Mahjong — you won!' : `${PLAYER_NAMES[game.winner.player]} wins`}
+                  {game.winner.player === 0 ? 'Mahjong — you won' : `${PLAYER_NAMES[game.winner.player]} wins`}
                 </h2>
                 <p>
-                  “{game.winner.hand.pattern.display}” · {game.winner.hand.pattern.section} ·{' '}
+                  &ldquo;{game.winner.hand.pattern.display}&rdquo; · {game.winner.hand.pattern.section} ·{' '}
                   {game.winner.points} points{game.winner.selfDraw ? ' · self-drawn' : ''}
                 </p>
                 <div className="tiles">
@@ -317,7 +448,7 @@ export function Table() {
             ) : (
               <>
                 <h2>Wall game</h2>
-                <p>The wall ran dry before anyone made mahjong. It happens to the best tables.</p>
+                <p>The wall ran dry before anyone made mahjong. No winner, no harm.</p>
               </>
             )}
             <button className="btn btn-primary" onClick={newGame}>
